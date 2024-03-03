@@ -27,6 +27,14 @@ function finishBatch() {
     batchDepth = 0;
   }
 }
+function batch(fn) {
+  startBatch();
+  try {
+    fn();
+  } finally {
+    finishBatch();
+  }
+}
 let Listener = null;
 function readNode() {
   if (Listener) {
@@ -1509,7 +1517,7 @@ function ProductionColumn({
     columnEl.updateDrag = updateDrag;
     columnEl.updateDragStart = updateDragStart;
     columnEl.updateDragFinish = updateDragFinish;
-    let maxY, dragElHeight, dragMode, dragItem, columnEl2;
+    let dragElHeight, dragMode, dragItem, columnEl2;
     DelegateDraggable(columnEl, ".production-item", {
       // placeholder: true,
       move: ({
@@ -1520,6 +1528,7 @@ function ProductionColumn({
         if (dragMode === DragMode.Column) {
           return;
         }
+        const maxY = columnEl.offsetHeight;
         if (dragMode === DragMode.Single) {
           let [newX, newY] = el2.handleDragMoveItem(column, dragItem, x, maxY - dragElHeight - y);
           newY = maxY - dragElHeight - newY;
@@ -1542,7 +1551,6 @@ function ProductionColumn({
         if (dragMode === DragMode.Column) {
           return;
         }
-        maxY = columnEl.offsetHeight;
         dragElHeight = el2.offsetHeight;
         if (dragMode === DragMode.Single) {
           el2.classList.add("dragging");
@@ -1758,7 +1766,8 @@ function PanelItemsPalette({
   }])])])])]);
 }
 function PanelIncome({
-  getEconomyItems
+  getEconomyItems,
+  workersCount
 }) {
   let economyItems;
   function setupItems(itemsEl) {
@@ -1781,7 +1790,14 @@ function PanelIncome({
   const _economyItems = () => economyItems = getEconomyItems();
   return h("div", {
     "id": "panel-income"
-  }, [h(Index, {
+  }, [h("div", {
+    "id": "workers-count"
+  }, [h("div", {
+    "class": "workers-count-icon",
+    "style": "background-image: url('./resources/unit-terran-scv.png')"
+  }, []), h("span", {
+    "class": "workers-count-label"
+  }, [workersCount])]), h(Index, {
     "each": _economyItems,
     "ref": (els) => setupItems(els)
   }, [(item) => {
@@ -1796,6 +1812,9 @@ function PanelIncome({
     } else {
       return h("div", {
         "class": "spending-item-space",
+        "classList": {
+          "spending-item-next": item.isPrevSpent
+        },
         "style": {
           "min-height": item.height + "px",
           width: item.width + "px",
@@ -1815,12 +1834,14 @@ function ProductionColumnsData(validateRequirement, columnRemoved, getUnitData, 
   let nextColumnId = 1, nextItemId = 1;
   const [trackColumns, notifyColumns] = voidSignal();
   const [trackColumnsData, notifyColumnsData] = voidSignal();
+  const [workersCount, setWorkersCount] = signal(0);
   let incomeItems;
   function getEconomyItems() {
     trackColumnsData();
     const timeScale = getTimeScale();
     const incomeWidthScale = 4;
     const workerIncome = 60;
+    let workers = INITIAL_WORKERS;
     incomeItems = [{
       time: 0,
       endTime: 0,
@@ -1831,7 +1852,8 @@ function ProductionColumnsData(validateRequirement, columnRemoved, getUnitData, 
       color: void 0,
       id: void 0,
       isSpent: false,
-      reminder: INITIAL_MINERALS * INCOME_SCALE_DIV
+      reminder: INITIAL_MINERALS * INCOME_SCALE_DIV,
+      isPrevSpent: false
       // spendingHigher: true, spendingPrevHigher: false,
       // key: '', itemsId: ['I'],
     }];
@@ -1853,7 +1875,8 @@ function ProductionColumnsData(validateRequirement, columnRemoved, getUnitData, 
           color: void 0,
           id: void 0,
           isSpent: false,
-          reminder: 0
+          reminder: 0,
+          isPrevSpent: false
           // spendingHigher: false, spendingPrevHigher: false,
           // key: '', itemsId: [itemId],
         });
@@ -1879,8 +1902,22 @@ function ProductionColumnsData(validateRequirement, columnRemoved, getUnitData, 
           insertTimeEnd = incomeItem.time;
           continue;
         }
+        if (incomeItem.time >= insertTimeEnd) {
+          continue;
+        }
         const incomePerMin = incomeItem.incomePerMin;
         const available = incomePerMin * (insertTimeEnd - incomeItem.time);
+        if (available === 0) {
+          console.log("zero height!");
+          console.log({
+            insertTimeEnd,
+            isSpent: incomeItem.isSpent,
+            incomeItem: {
+              ...incomeItem
+            },
+            incomeItemTime: incomeItem.time
+          });
+        }
         let insertTime, unspentReminder = 0;
         if (remaining >= available) {
           insertTime = incomeItem.time;
@@ -1903,7 +1940,8 @@ function ProductionColumnsData(validateRequirement, columnRemoved, getUnitData, 
             color: void 0,
             id: void 0,
             isSpent: false,
-            reminder: 0
+            reminder: 0,
+            isPrevSpent: false
           });
         }
         replaceItems.push({
@@ -1915,7 +1953,8 @@ function ProductionColumnsData(validateRequirement, columnRemoved, getUnitData, 
           color,
           id: itemId,
           isSpent: true,
-          reminder: unspentReminder
+          reminder: unspentReminder,
+          isPrevSpent: false
         });
         const isLast = i === incomeItems.length - 1;
         if (isLast || incomeItem.endTime > insertTimeEnd) {
@@ -1923,13 +1962,13 @@ function ProductionColumnsData(validateRequirement, columnRemoved, getUnitData, 
             time: insertTimeEnd,
             endTime: incomeItem.endTime,
             incomePerMin,
-            // unspent: incomePerMin * (incomeItem.endTime - insertTimeEnd),
             width: 0,
             height: 0,
             color: void 0,
             id: void 0,
             isSpent: false,
-            reminder: 0
+            reminder: 0,
+            isPrevSpent: false
           });
         }
         insertTimeEnd = insertTime;
@@ -1980,6 +2019,9 @@ function ProductionColumnsData(validateRequirement, columnRemoved, getUnitData, 
           continue;
         }
         const unitData = getUnitData(item.typeId);
+        if (unitData.category === Category.WORKER) {
+          workers++;
+        }
         if (unitData.mineralCost > 0) {
           insertSpending(item.time, unitData.mineralCost, item.id, Color[unitData.category]);
         }
@@ -1988,10 +2030,13 @@ function ProductionColumnsData(validateRequirement, columnRemoved, getUnitData, 
     for (const income of incomeItems) {
       income.height = (income.endTime - income.time) * timeScale;
       income.width = divideInt(income.incomePerMin * incomeWidthScale, INCOME_SCALE_DIV);
+      income.isPrevSpent = lastItem.isSpent && income.isSpent && income.id !== lastItem.id;
+      lastItem = income;
     }
-    incomeItems[incomeItems.length - 1].isLast = true;
+    lastItem.isLast = true;
     incomeItems[0].spendingHigher = true;
     incomeItems[0].spendingPrevHigher = false;
+    setWorkersCount(workers);
     return incomeItems;
   }
   function initColumnItems(columnItems) {
@@ -2099,11 +2144,6 @@ function ProductionColumnsData(validateRequirement, columnRemoved, getUnitData, 
     }
     return index;
   }
-  function appendColumn() {
-    columns.push(createColumn());
-    notifyColumns();
-    notifyColumnsData();
-  }
   function removeColumn(column) {
     const index = findColumnIndex(column);
     columns.splice(index, 1);
@@ -2129,7 +2169,7 @@ function ProductionColumnsData(validateRequirement, columnRemoved, getUnitData, 
   function appendItem(column, typeId, data2 = {}) {
     const {
       visible = true,
-      time = getColumnEndTime(column),
+      time = Math.max(getColumnEndTime(column), data2.minTime || 0),
       productionTypeId
     } = data2;
     const unitData = getUnitData(typeId);
@@ -2147,7 +2187,9 @@ function ProductionColumnsData(validateRequirement, columnRemoved, getUnitData, 
     nextItemId++;
     column.items.push(item);
     column.notify();
-    notifyColumnsData();
+    if (column.items.length === 1) {
+      insertColumnAfter(createColumn(), column);
+    }
     if (!column.isSecondary && unitData.category === Category.ADDON) {
       let insertCol = false;
       if (!column.secondaryCol) {
@@ -2164,6 +2206,7 @@ function ProductionColumnsData(validateRequirement, columnRemoved, getUnitData, 
         insertColumnAfter(column.secondaryCol, column);
       }
     }
+    notifyColumnsData();
   }
   function deleteElement(items, fn) {
     const index = items.findIndex(fn);
@@ -2390,11 +2433,12 @@ function ProductionColumnsData(validateRequirement, columnRemoved, getUnitData, 
   }
   const columnsData = () => trackColumns(columns);
   return {
+    workersCount,
     columnsData,
     getEconomyItems,
     getPrimaryColumn,
-    appendColumn,
-    removeColumn,
+    // appendColumn,
+    // removeColumn,
     // moveColumn,
     appendItem,
     removeItem,
@@ -2520,10 +2564,10 @@ function App() {
     }
   }
   const {
+    workersCount,
     columnsData,
     getEconomyItems,
     getPrimaryColumn,
-    appendColumn,
     appendItem,
     removeItem,
     dragStartItem,
@@ -2605,16 +2649,23 @@ function App() {
     []
   ]);
   function handleRemoveItem(column, item) {
-    removeItem(column, item);
-    if (selectedColumn && selectedColumn.id === column.id) {
-      updateButtons();
-    }
+    batch(() => {
+      removeItem(column, item);
+      if (selectedColumn && selectedColumn.id === column.id) {
+        updateButtons();
+      }
+    });
   }
   function handleAppendItem(typeId) {
-    if (selectedColumn) {
-      appendItem(selectedColumn, typeId);
-      updateButtons();
-    }
+    batch(() => {
+      if (selectedColumn) {
+        const minTime = divideInt(panelProductionEl.scrollHeight - panelProductionEl.scrollTop - panelProductionEl.offsetHeight, timeScale());
+        appendItem(selectedColumn, typeId, {
+          minTime
+        });
+        updateButtons();
+      }
+    });
   }
   const panelProductionEl = document.getElementById("panel-production");
   delegateEvent(panelProductionEl, ".production-button-add-item", "click", (el) => el.clickAppendItem(el));
@@ -2629,7 +2680,8 @@ function App() {
     setSelectedColumn
   });
   render(PanelIncome, document.getElementById("panel-income"), {
-    getEconomyItems
+    getEconomyItems,
+    workersCount
   });
   render(PanelItemsPalette, document.getElementById("panel-items-palette"), {
     buttonCategories,
