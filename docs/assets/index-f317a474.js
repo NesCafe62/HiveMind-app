@@ -1656,7 +1656,7 @@ function ProductionColumn({
       }, [h("div", {
         "class": "production-icon",
         "style": {
-          "background-image": `url('/resources/${item.icon}')`
+          "background-image": `url('./resources/${item.icon}')`
         }
       }, [])]);
     }
@@ -1751,7 +1751,7 @@ function PanelItemsPalette({
       "disabled": button.isDisabled ? "" : void 0
     }, [h("div", {
       "style": {
-        "background-image": `url('/resources/${button.icon}')`
+        "background-image": `url('./resources/${button.icon}')`
       },
       "class": "production-icon"
     }, [])]);
@@ -2407,7 +2407,7 @@ function ProductionColumnsData(validateRequirement, columnRemoved, getUnitData, 
 function preloadImages() {
   for (const unitData of UnitsData.Terran) {
     const image = new Image();
-    image.src = "/resources/" + unitData.icon;
+    image.src = "./resources/" + unitData.icon;
   }
 }
 function App() {
