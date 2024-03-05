@@ -22648,8 +22648,6 @@ main {
   height: 0;
   cursor: pointer;
   width: 50px;
-  position: relative;
-  z-index: 1;
 }
 .production-item::before {
   /* background: linear-gradient(0deg, #0000 0%, #1b193182 100%);
@@ -22884,6 +22882,7 @@ main {
   background-size: 47px 47px;
   max-height: 100%;
   background-position: center;
+  position: relative;
 }
 .icon-1 {
   background-image: url("../resources/building-terran-barracks.png");
