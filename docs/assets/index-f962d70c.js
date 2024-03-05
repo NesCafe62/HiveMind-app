@@ -2166,6 +2166,9 @@ function ProductionColumnsData(validateRequirement, columnRemoved, getUnitData, 
     }
     return void 0;
   }
+  function isLastColumn(column) {
+    return column === columns[columns.length - 1];
+  }
   function appendItem(column, typeId, data2 = {}) {
     const {
       visible = true,
@@ -2187,7 +2190,7 @@ function ProductionColumnsData(validateRequirement, columnRemoved, getUnitData, 
     nextItemId++;
     column.items.push(item);
     column.notify();
-    if (column.items.length === 1) {
+    if (column.items.length === 1 && isLastColumn(column)) {
       insertColumnAfter(createColumn(), column);
     }
     if (!column.isSecondary && unitData.category === Category.ADDON) {
